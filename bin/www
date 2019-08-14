@@ -11,10 +11,11 @@ const options = {
     meta: true // determines if the sessions object will contain meta information
 };
 let arguments = process.argv.splice(2);
-let argObj=checkArguments(arguments)
+let argObj = checkArguments(arguments)
+
 //检查输入参数，返回输入参数对象
-function checkArguments(args){
-    if(args.length==0 || args[0]=="-h" || args[0]=="-help"){
+function checkArguments(args) {
+    if (args.length == 0 || args[0] == "-h" || args[0] == "-help") {
         console.log("-h,-help  print help list")
         console.log("saz  assign fidder saz file path,eg:saz=test.saz")
         console.log("ip  assign yapi domain or ip,eg:ip=xxx.xxx.xxx.xxx")
@@ -25,50 +26,52 @@ function checkArguments(args){
         console.log("cname  assign yapi case collection name,eg:cname=login")
         process.exit(0)
     }
-    let argObj={}
-    args.forEach(function(item,index,array){
-        let itemArray=item.split("=");
-        argObj[itemArray[0]]=itemArray[1];
+    let argObj = {}
+    args.forEach(function (item, index, array) {
+        let itemArray = item.split("=");
+        argObj[itemArray[0]] = itemArray[1];
     })
     return argObj
 }
-let domainUrl="http://"+argObj.ip+":3000";
-let loginUrl=domainUrl+"/api/user/login";
-let groupUrl=domainUrl + "/api/group/list"
+
+let domainUrl = "http://" + argObj.ip + ":3000";
+let loginUrl = domainUrl + "/api/user/login";
+let groupUrl = domainUrl + "/api/group/list"
 let user = argObj['user']
 let passwd = argObj['passwd']
-let token=getToken(loginUrl,user,passwd)
-let groupId = checkGroup(groupUrl,token,argObj['gname'])
-let projectUrl= domainUrl+'/api/project/list?group_id='+groupId+'&page=1&limit=10'
-let projectId = checkProject(projectUrl,token,argObj['pname'])
-let getintfColUrl=domainUrl+'/api/interface/list_menu?project_id='+projectId
-let addIntColUrl=domainUrl+'/api/interface/add_cat'
-let intColId = addIntCol(addIntColUrl,getintfColUrl,token,argObj['cname'],projectId)
-let addIntfUrl = domainUrl+'/api/interface/add'
-let intfListUrl = domainUrl+'/api/interface/list_cat?page=1&limit=20&catid='+intColId
-let upIntUrl = domainUrl+'/api/interface/up'
-let addCaseColUrl = domainUrl+'/api/col/add_col'
-let col_id=addCat(addCaseColUrl,token,argObj['cname'],'',projectId)
-let addCaseUrl=domainUrl+'/api/col/add_case'
+let token = getToken(loginUrl, user, passwd)
+let groupId = checkGroup(groupUrl, token, argObj['gname'])
+let projectUrl = domainUrl + '/api/project/list?group_id=' + groupId + '&page=1&limit=10'
+let projectId = checkProject(projectUrl, token, argObj['pname'])
+let getintfColUrl = domainUrl + '/api/interface/list_menu?project_id=' + projectId
+let addIntColUrl = domainUrl + '/api/interface/add_cat'
+let intColId = addIntCol(addIntColUrl, getintfColUrl, token, argObj['cname'], projectId)
+let addIntfUrl = domainUrl + '/api/interface/add'
+let intfListUrl = domainUrl + '/api/interface/list_cat?page=1&limit=20&catid=' + intColId
+let upIntUrl = domainUrl + '/api/interface/up'
+let addCaseColUrl = domainUrl + '/api/col/add_col'
+let col_id = addCat(addCaseColUrl, token, argObj['cname'], '', projectId)
+let addCaseUrl = domainUrl + '/api/col/add_case'
+let upTestReportUrl = domainUrl + '/api/col/up_col'
 let sazFilePath = argObj['saz']
-parser(sazFilePath, options, function(err, sessions) {
+parser(sazFilePath, options, function (err, sessions) {
     if (err) throw err;
-    for(let i=1;i<100000;i++){
-        let index=sessions[i];
-        if (index==undefined){
+    let testReport = {}
+    for (let i = 1; i < 100000; i++) {
+        let index = sessions[i];
+        if (index == undefined) {
             break;
         }
-        console.log(index)
         let method = index.request.method
         let domain = index.request.headers.Host
         let path = index.request.url.split(domain)[1]
         let title = path
-        addInt(addIntfUrl,token,projectId,intColId,method,title,path)
-        let intId=getIdByIntName(intfListUrl,token,intColId,path,method)
+        addInt(addIntfUrl, token, projectId, intColId, method, title, path)
+        let intId = getIdByIntName(intfListUrl, token, intColId, path, method)
         let req_headers = getHeaders(index)
-        let req_body_other = getContent(index,'request')
-        let res_body = getContent(index,'response')
-        let upIntBody={
+        let req_body_other = getContent(index, 'request')
+        let res_body = getContent(index, 'response')
+        let upIntBody = {
             "req_query": [],
             "req_headers": req_headers,
             "req_body_form": [],
@@ -91,10 +94,10 @@ parser(sazFilePath, options, function(err, sessions) {
             "req_params": [],
             "id": intId
         }
-        upInt(upIntUrl,token,upIntBody)
-        let getIntUrl=domainUrl+'/api/interface/get?id='+intId
-        let intData=getInt(getIntUrl,token)
-        let addCaseBody={
+        upInt(upIntUrl, token, upIntBody)
+        let getIntUrl = domainUrl + '/api/interface/get?id=' + intId
+        let intData = getInt(getIntUrl, token)
+        let addCaseBody = {
             "interface_id": intData.data._id,
             "casename": intData.data.title,
             "col_id": col_id,
@@ -107,186 +110,241 @@ parser(sazFilePath, options, function(err, sessions) {
             "req_body_form": [],
             "req_body_other": req_body_other
         }
-        addCase(addCaseUrl,token,addCaseBody)
+        let caseId = addCase(addCaseUrl, token, addCaseBody)
         console.log("---------------------------------------------------------------------------------------");
+        let reportBody = {
+            "url": index.request.url,
+            "caseId": caseId,
+            "method": method,
+            "headers": index.request.headers,
+            "timeout": 82400000,
+            "data": req_body_other,
+            "taskId": 1,
+            "code": 0,
+            "msg": "数据异常",
+            "validRes": [
+                {
+                    "message": "验证通过"
+                }
+            ],
+            "res_header": index.response.headers,
+            "res_body": res_body,
+            "status": 200,
+            "statusText": "OK",
+            "params": req_body_other
+        }
+        testReport[caseId] = reportBody
+        testReport = JSON.stringify(testReport)
+        testReport = JSON.parse(testReport)
+        console.log(",,,,,,,,,,,,,,,,,,,,,,,", testReport)
+        process.exit(0)
     }
+    // upTestReport(upTestReportUrl, token, testReport)
 });
 
 //获取token
-function getToken(url,user,pass){
-    let token_str=""
-    let res = request('POST',url,{json:{email: user,password:pass}});
-    var body =JSON.parse(res.getBody('utf8'))
-     if(body.errcode==0){
-         let cookie_array = res.headers['set-cookie']
-         cookie_array.forEach(function(item,index,array){
-             item.split(";").forEach(function (it,ind,arr) {
-                 if (it.startsWith('_yapi_token=')){
-                     token_str = it + ';'
-                 }
-                 if (it.startsWith('_yapi_uid=')){
-                     token_str = token_str + it
-                 }
-             })
-         })
-         return token_str
-     } else{
-         return ""
-     }
+function getToken(url, user, pass) {
+    let token_str = ""
+    let res = request('POST', url, {json: {email: user, password: pass}});
+    var body = JSON.parse(res.getBody('utf8'))
+    if (body.errcode == 0) {
+        let cookie_array = res.headers['set-cookie']
+        cookie_array.forEach(function (item, index, array) {
+            item.split(";").forEach(function (it, ind, arr) {
+                if (it.startsWith('_yapi_token=')) {
+                    token_str = it + ';'
+                }
+                if (it.startsWith('_yapi_uid=')) {
+                    token_str = token_str + it
+                }
+            })
+        })
+        return token_str
+    } else {
+        return ""
+    }
 }
-function checkGroup(url,token,gname){
-    let res = request('GET',url,{headers:{Cookie:token}})
+
+function checkGroup(url, token, gname) {
+    let res = request('GET', url, {headers: {Cookie: token}})
     res = res.getBody('utf-8')
     res = JSON.parse(res)
-    let groupId =undefined
-    res.data.forEach(function (item,index,array) {
-        if (item.group_name == gname){
+    let groupId = undefined
+    res.data.forEach(function (item, index, array) {
+        if (item.group_name == gname) {
             groupId = item['_id']
         }
     })
-    if (groupId==undefined){
+    if (groupId == undefined) {
         console.log("组不存在，请检查输入的gname是否在yapi上存在")
         process.exit(0)
     }
     return groupId
 }
-function checkProject(url,token,pname) {
-    let res = request('GET',url,{headers:{Cookie:token}})
+
+function checkProject(url, token, pname) {
+    let res = request('GET', url, {headers: {Cookie: token}})
     res = res.getBody('utf-8')
     res = JSON.parse(res)
-    let projectId =undefined
-    res.data.list.forEach(function (item,index,array) {
-        if (item.name == pname){
+    let projectId = undefined
+    res.data.list.forEach(function (item, index, array) {
+        if (item.name == pname) {
             projectId = item['_id']
         }
     })
-    if (projectId==undefined){
+    if (projectId == undefined) {
         console.log("项目不存在，请检查输入的pname是否在yapi上存在")
         process.exit(0)
     }
     return projectId
 }
 
-function checkIntCol(url,token,cname){
-    let res = request('GET',url,{headers:{Cookie:token}})
+function checkIntCol(url, token, cname) {
+    let res = request('GET', url, {headers: {Cookie: token}})
     res = res.getBody('utf-8')
     res = JSON.parse(res)
-    let intfColId =undefined
-    res.data.forEach(function (item,index,array) {
-        if (item.name == cname){
+    let intfColId = undefined
+    res.data.forEach(function (item, index, array) {
+        if (item.name == cname) {
             intfColId = item['_id']
         }
     })
     return intfColId
 }
-function addIntCol(addIntfColUrl,getIntfColUrl,token,cname,projectId){
-    let intfCol=checkIntCol(getIntfColUrl,token,cname)
-    if(intfCol!=undefined){
+
+function addIntCol(addIntfColUrl, getIntfColUrl, token, cname, projectId) {
+    let intfCol = checkIntCol(getIntfColUrl, token, cname)
+    if (intfCol != undefined) {
         console.log("接口集合已存在，建议换个名字")
         process.exit(0)
     }
-    let res = request('POST',addIntfColUrl,{json:{name: cname,desc:null,project_id:projectId},headers:{Cookie:token}});
-    res =JSON.parse(res.getBody('utf8'))
-    let intfColId=undefined
-    if (res.errcode==0){
-        intfColId=checkIntCol(getIntfColUrl,token,cname)
-        if(intfColId!=undefined){
-            console.log("创建接口集合成功:",cname)
-        } else{
-            console.log("创建接口集合失败:",cname)
+    let res = request('POST', addIntfColUrl, {
+        json: {name: cname, desc: null, project_id: projectId},
+        headers: {Cookie: token}
+    });
+    res = JSON.parse(res.getBody('utf8'))
+    let intfColId = undefined
+    if (res.errcode == 0) {
+        intfColId = checkIntCol(getIntfColUrl, token, cname)
+        if (intfColId != undefined) {
+            console.log("创建接口集合成功:", cname)
+        } else {
+            console.log("创建接口集合失败:", cname)
         }
     }
     return intfColId
 }
-function addInt(url,token,projectId,catId,method,title,path){
-    let data = {method: method,catid:catId,title:title,path:path,project_id:projectId}
-    let res = request('POST',url,{json:data,headers:{Cookie:token}});
-    res =JSON.parse(res.getBody('utf8'))
-    if (res.errcode==0){
-        console.log("增加接口成功:",path)
-    } else{
-        console.log("增加接口失败:",path)
+
+function addInt(url, token, projectId, catId, method, title, path) {
+    let data = {method: method, catid: catId, title: title, path: path, project_id: projectId}
+    let res = request('POST', url, {json: data, headers: {Cookie: token}});
+    res = JSON.parse(res.getBody('utf8'))
+    if (res.errcode == 0) {
+        console.log("增加接口成功:", path)
+    } else {
+        console.log("增加接口失败:", path)
         process.exit(0)
     }
 }
 
-function addCat(url,token,name,desc,projectId){
-    let data={name:name,desc:desc,project_id:projectId}
-    let res = request('POST',url,{json:data,headers:{Cookie:token}});
-    res =JSON.parse(res.getBody('utf8'))
-    let cat_id=undefined
-    if (res.errcode==0){
-        console.log("增加case集合成功:",name)
-        cat_id=res.data._id
-    } else{
-        console.log("增加case集合失败:",name)
+function addCat(url, token, name, desc, projectId) {
+    let data = {name: name, desc: desc, project_id: projectId}
+    let res = request('POST', url, {json: data, headers: {Cookie: token}});
+    res = JSON.parse(res.getBody('utf8'))
+    let cat_id = undefined
+    if (res.errcode == 0) {
+        console.log("增加case集合成功:", name)
+        cat_id = res.data._id
+    } else {
+        console.log("增加case集合失败:", name)
         process.exit(0)
     }
     console.log("---------------------------------------------------------------------------------------");
     return cat_id
 }
-function addCase(url,token,data){
-    let res = request('POST',url,{json:data,headers:{Cookie:token}});
-    res =JSON.parse(res.getBody('utf8'))
-    let caseId=undefined
-    if (res.errcode==0){
-        console.log("增加case成功:",data.casename)
-        caseId=res.data._id
-    } else{
-        console.log("增加case失败:",data.casename)
+
+function addCase(url, token, data) {
+    let res = request('POST', url, {json: data, headers: {Cookie: token}});
+    res = JSON.parse(res.getBody('utf8'))
+    let caseId = undefined
+    if (res.errcode == 0) {
+        console.log("增加case成功:", data.casename)
+        caseId = res.data._id
+    } else {
+        console.log("增加case失败:", data.casename)
         process.exit(0)
     }
     return caseId
 }
 
-function getIdByIntName(url,token,catId,intPath,intType){
-    let intId=undefined
-    let res = request('GET',url,{headers:{Cookie:token}})
-    res =JSON.parse(res.getBody('utf8'))
-    res.data.list.forEach(function (item,index,array) {
-        if (item.catid == catId && item.method==intType && item.path == intPath){
+function getIdByIntName(url, token, catId, intPath, intType) {
+    let intId = undefined
+    let res = request('GET', url, {headers: {Cookie: token}})
+    res = JSON.parse(res.getBody('utf8'))
+    res.data.list.forEach(function (item, index, array) {
+        if (item.catid == catId && item.method == intType && item.path == intPath) {
             intId = item['_id']
         }
     })
     return intId
 }
-function upInt(url,token,body){
-    let res = request('POST',url,{json:body,headers:{Cookie:token}});
-    res =JSON.parse(res.getBody('utf8'))
-    if (res.errcode==0){
-        console.log("更新接口成功",body.path)
+
+function upInt(url, token, body) {
+    let res = request('POST', url, {json: body, headers: {Cookie: token}});
+    res = JSON.parse(res.getBody('utf8'))
+    if (res.errcode == 0) {
+        console.log("更新接口成功", body.path)
     } else {
-        console.log("更新接口失败",body.path)
+        console.log("更新接口失败", body.path)
         process.exit(0)
     }
 }
 
-function getInt(url,token){
-    let res = request('GET',url,{headers:{Cookie:token}})
+function upTestReport(url, token, col_id, body) {
+    body = JSON.stringify(body)
+    console.log(">>>>>>>>>>>>>>>>>>>>>", body)
+    let data = {col_id: col_id, body}
+    let res = request('POST', url, {json: data, headers: {Cookie: token}});
+    res = JSON.parse(res.getBody('utf8'))
+    // console.log(">>>>>>>>>>>>>>>",res)
+    if (res.errcode == 0) {
+        console.log("更新报告成功")
+    } else {
+        console.log("更新报告失败")
+        process.exit(0)
+    }
+}
+
+
+function getInt(url, token) {
+    let res = request('GET', url, {headers: {Cookie: token}})
     res = res.getBody('utf-8')
     res = JSON.parse(res)
     return res
 }
 
 
-function getHeaders(sazItem){
-    let ready=['Content-Type','Authorization']
-    let header=[]
-    let headers=sazItem['request']['headers']
-    ready.forEach(function(item,index,array){
-        if(headers[item]!=undefined){
-            header.push({name:item,value:headers[item]})
+function getHeaders(sazItem) {
+    let ready = ['Content-Type', 'Authorization']
+    let header = []
+    let headers = sazItem['request']['headers']
+    ready.forEach(function (item, index, array) {
+        if (headers[item] != undefined) {
+            header.push({name: item, value: headers[item]})
         }
     })
     return header
 }
-function getContent(sazItem,contentType){
+
+function getContent(sazItem, contentType) {
     let content = sazItem[contentType].content
-    let start=content.indexOf('{')
-    let end = content.lastIndexOf("}")+1
-    content=content.substring(start,end)
-    content = content.replace(/\n/g,"").replace(/\r/g,"");
-    content = content.replace(/\n/g,"").replace(/\s|\xA0/g,"");
+    let start = content.indexOf('{')
+    let end = content.lastIndexOf("}") + 1
+    content = content.substring(start, end)
+    content = content.replace(/\n/g, "").replace(/\r/g, "");
+    content = content.replace(/\n/g, "").replace(/\s|\xA0/g, "");
     return content
 }
+
+
 
