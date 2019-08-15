@@ -4,13 +4,13 @@
  * Module dependencies.
  */
 const parser = require('saz2js');
-const request = require('sync-request');
+const request = require('sync-request')
 const options = {
     req: true, // determines if the sessions object will contain request data
     res: true, // determines if the sessions object will contain response data
     meta: true // determines if the sessions object will contain meta information
 };
-let arguments = process.argv.splice(2);
+let arguments = process.argv.splice(2)
 let argObj = checkArguments(arguments)
 
 //检查输入参数，返回输入参数对象
@@ -80,7 +80,7 @@ parser(sazFilePath, options, function (err, sessions) {
             "path": path,
             "tag": [],
             "status": "undone",
-            "req_body_type": "raw",
+            "req_body_type": "json",
             "req_body_is_json_schema": true,
             "res_body_is_json_schema": true,
             "res_body_type": "raw",
@@ -106,7 +106,7 @@ parser(sazFilePath, options, function (err, sessions) {
             "req_params": [],
             "req_query": [],
             "req_headers": intData.data.req_headers,
-            "req_body_type": "raw",
+            "req_body_type": "json",
             "req_body_form": [],
             "req_body_other": req_body_other
         }
@@ -118,7 +118,7 @@ parser(sazFilePath, options, function (err, sessions) {
             "method": method,
             "headers": index.request.headers,
             "timeout": 82400000,
-            "data": req_body_other,
+            "data": JSON.parse(req_body_other),
             "taskId": 1,
             "code": 0,
             "msg": "数据异常",
@@ -128,18 +128,14 @@ parser(sazFilePath, options, function (err, sessions) {
                 }
             ],
             "res_header": index.response.headers,
-            "res_body": res_body,
+            "res_body": JSON.parse(res_body),
             "status": 200,
             "statusText": "OK",
             "params": req_body_other
         }
         testReport[caseId] = reportBody
-        testReport = JSON.stringify(testReport)
-        testReport = JSON.parse(testReport)
-        console.log(",,,,,,,,,,,,,,,,,,,,,,,", testReport)
-        process.exit(0)
     }
-    // upTestReport(upTestReportUrl, token, testReport)
+    upTestReport(upTestReportUrl, token, col_id,testReport)
 });
 
 //获取token
@@ -301,12 +297,9 @@ function upInt(url, token, body) {
 }
 
 function upTestReport(url, token, col_id, body) {
-    body = JSON.stringify(body)
-    console.log(">>>>>>>>>>>>>>>>>>>>>", body)
-    let data = {col_id: col_id, body}
+    let data = {col_id: col_id, test_report:JSON.stringify(body)}
     let res = request('POST', url, {json: data, headers: {Cookie: token}});
     res = JSON.parse(res.getBody('utf8'))
-    // console.log(">>>>>>>>>>>>>>>",res)
     if (res.errcode == 0) {
         console.log("更新报告成功")
     } else {
@@ -341,8 +334,24 @@ function getContent(sazItem, contentType) {
     let start = content.indexOf('{')
     let end = content.lastIndexOf("}") + 1
     content = content.substring(start, end)
-    content = content.replace(/\n/g, "").replace(/\r/g, "");
-    content = content.replace(/\n/g, "").replace(/\s|\xA0/g, "");
+    content = content.replace(/\n/g, "").replace(/\r/g, "")
+    content = content.replace(/\n/g, "").replace(/\s|\xA0/g, "")
+    if(content==''){
+        content='{}'
+    }
+    try {
+        JSON.parse(content)
+    } catch (e) {
+        content = content.replace(/:\d+\w+/g, ':0')
+        if(contentType=='request'){
+            console.log("请求数据格式异常")
+            console.log("格式化后的request content:",content)
+        }
+        if(contentType=='response'){
+            console.log("返回数据格式异常")
+            console.log("格式化后的response content:",content)
+        }
+    }
     return content
 }
 
