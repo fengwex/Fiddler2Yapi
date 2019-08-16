@@ -34,40 +34,43 @@ function checkArguments(args) {
     return argObj
 }
 
-let domainUrl = "http://" + argObj.ip + ":3000";
-let loginUrl = domainUrl + "/api/user/login";
-let groupUrl = domainUrl + "/api/group/list"
-let user = argObj['user']
-let passwd = argObj['passwd']
-let token = getToken(loginUrl, user, passwd)
-let groupId = checkGroup(groupUrl, token, argObj['gname'])
-let projectUrl = domainUrl + '/api/project/list?group_id=' + groupId + '&page=1&limit=10'
-let projectId = checkProject(projectUrl, token, argObj['pname'])
-let getintfColUrl = domainUrl + '/api/interface/list_menu?project_id=' + projectId
-let addIntColUrl = domainUrl + '/api/interface/add_cat'
-let intColId = addIntCol(addIntColUrl, getintfColUrl, token, argObj['cname'], projectId)
-let addIntfUrl = domainUrl + '/api/interface/add'
-let intfListUrl = domainUrl + '/api/interface/list_cat?page=1&limit=20&catid=' + intColId
-let upIntUrl = domainUrl + '/api/interface/up'
-let addCaseColUrl = domainUrl + '/api/col/add_col'
-let col_id = addCat(addCaseColUrl, token, argObj['cname'], '', projectId)
-let addCaseUrl = domainUrl + '/api/col/add_case'
-let upTestReportUrl = domainUrl + '/api/col/up_col'
 let sazFilePath = argObj['saz']
 parser(sazFilePath, options, function (err, sessions) {
-    if (err) throw err;
+    if (err) throw err
+    let domainUrl = "http://" + argObj.ip + ":3000";
+    let loginUrl = domainUrl + "/api/user/login";
+    let groupUrl = domainUrl + "/api/group/list"
+    let user = argObj['user']
+    let passwd = argObj['passwd']
+    let token = getToken(loginUrl, user, passwd)
+    let groupId = checkGroup(groupUrl, token, argObj['gname'])
+    let projectUrl = domainUrl + '/api/project/list?group_id=' + groupId + '&page=1&limit=10'
+    let projectId = checkProject(projectUrl, token, argObj['pname'])
+    let getintfColUrl = domainUrl + '/api/interface/list_menu?project_id=' + projectId
+    let addIntColUrl = domainUrl + '/api/interface/add_cat'
+    let intColId = addIntCol(addIntColUrl, getintfColUrl, token, argObj['cname'], projectId)
+    let addIntfUrl = domainUrl + '/api/interface/add'
+    let upIntUrl = domainUrl + '/api/interface/up'
+    let addCaseColUrl = domainUrl + '/api/col/add_col'
+    let col_id = addCat(addCaseColUrl, token, argObj['cname'], '', projectId)
+    let addCaseUrl = domainUrl + '/api/col/add_case'
+    let upTestReportUrl = domainUrl + '/api/col/up_col'
+    let upCaseIndexUrl = domainUrl + '/api/col/up_case_index'
     let testReport = {}
-    for (let i = 1; i < 100000; i++) {
-        let index = sessions[i];
-        if (index == undefined) {
-            break;
-        }
+    let keys = []
+    let caseIds = []
+    for (let item in sessions) {
+        keys.push(item)
+    }
+    keys = keys.sort()
+    keys.forEach(function (item) {
+        console.log("开始添加........", item)
+        let index = sessions[item]
         let method = index.request.method
         let domain = index.request.headers.Host
         let path = index.request.url.split(domain)[1]
         let title = path
-        addInt(addIntfUrl, token, projectId, intColId, method, title, path)
-        let intId = getIdByIntName(intfListUrl, token, intColId, path, method)
+        let intId = addInt(addIntfUrl, token, projectId, intColId, method, title, path)
         let req_headers = getHeaders(index)
         let req_body_other = getContent(index, 'request')
         let res_body = getContent(index, 'response')
@@ -111,6 +114,7 @@ parser(sazFilePath, options, function (err, sessions) {
             "req_body_other": req_body_other
         }
         let caseId = addCase(addCaseUrl, token, addCaseBody)
+        caseIds.push(caseId)
         console.log("---------------------------------------------------------------------------------------");
         let reportBody = {
             "url": index.request.url,
@@ -134,8 +138,9 @@ parser(sazFilePath, options, function (err, sessions) {
             "params": req_body_other
         }
         testReport[caseId] = reportBody
-    }
-    upTestReport(upTestReportUrl, token, col_id,testReport)
+    })
+    upTestReport(upTestReportUrl, token, col_id, testReport)
+    upCaseIndex(upCaseIndexUrl, token, caseIds)
 });
 
 //获取token
@@ -235,12 +240,15 @@ function addInt(url, token, projectId, catId, method, title, path) {
     let data = {method: method, catid: catId, title: title, path: path, project_id: projectId}
     let res = request('POST', url, {json: data, headers: {Cookie: token}});
     res = JSON.parse(res.getBody('utf8'))
+    let int_id = undefined
     if (res.errcode == 0) {
         console.log("增加接口成功:", path)
+        int_id = res.data._id
     } else {
         console.log("增加接口失败:", path)
         process.exit(0)
     }
+    return int_id
 }
 
 function addCat(url, token, name, desc, projectId) {
@@ -264,8 +272,8 @@ function addCase(url, token, data) {
     res = JSON.parse(res.getBody('utf8'))
     let caseId = undefined
     if (res.errcode == 0) {
-        console.log("增加case成功:", data.casename)
         caseId = res.data._id
+        console.log("增加case成功:", caseId)
     } else {
         console.log("增加case失败:", data.casename)
         process.exit(0)
@@ -273,16 +281,20 @@ function addCase(url, token, data) {
     return caseId
 }
 
-function getIdByIntName(url, token, catId, intPath, intType) {
-    let intId = undefined
-    let res = request('GET', url, {headers: {Cookie: token}})
-    res = JSON.parse(res.getBody('utf8'))
-    res.data.list.forEach(function (item, index, array) {
-        if (item.catid == catId && item.method == intType && item.path == intPath) {
-            intId = item['_id']
-        }
+function upCaseIndex(url, token, caseIds) {
+    let data = []
+    caseIds.forEach(function (item, index) {
+        let it = {"id": item, "index": index}
+        data.push(it)
     })
-    return intId
+    let res = request('POST', url, {json: data, headers: {Cookie: token}});
+    res = JSON.parse(res.getBody('utf8'))
+    if (res.errcode == 0) {
+        console.log("更新case顺序成功")
+    } else {
+        console.log("更新case顺序失败", res)
+        process.exit(0)
+    }
 }
 
 function upInt(url, token, body) {
@@ -291,13 +303,14 @@ function upInt(url, token, body) {
     if (res.errcode == 0) {
         console.log("更新接口成功", body.path)
     } else {
-        console.log("更新接口失败", body.path)
+        console.log("更新接口失败", res)
+        console.log("更新参数", body)
         process.exit(0)
     }
 }
 
 function upTestReport(url, token, col_id, body) {
-    let data = {col_id: col_id, test_report:JSON.stringify(body)}
+    let data = {col_id: col_id, test_report: JSON.stringify(body)}
     let res = request('POST', url, {json: data, headers: {Cookie: token}});
     res = JSON.parse(res.getBody('utf8'))
     if (res.errcode == 0) {
@@ -336,20 +349,20 @@ function getContent(sazItem, contentType) {
     content = content.substring(start, end)
     content = content.replace(/\n/g, "").replace(/\r/g, "")
     content = content.replace(/\n/g, "").replace(/\s|\xA0/g, "")
-    if(content==''){
-        content='{}'
+    if (content == '') {
+        content = '{}'
     }
     try {
         JSON.parse(content)
     } catch (e) {
         content = content.replace(/:\d+\w+/g, ':0')
-        if(contentType=='request'){
+        if (contentType == 'request') {
             console.log("请求数据格式异常")
-            console.log("格式化后的request content:",content)
+            console.log("格式化后的request content:", content)
         }
-        if(contentType=='response'){
+        if (contentType == 'response') {
             console.log("返回数据格式异常")
-            console.log("格式化后的response content:",content)
+            console.log("格式化后的response content:", content)
         }
     }
     return content
