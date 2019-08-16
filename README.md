@@ -15,6 +15,8 @@ fiddler过滤待录制接口的域名![](images/fiddler-filter-domain.png)
 ![](images/yapi-remove-checkRepeat02.png)
 ### 2.yapi部署
 yapi二次开发部署请参考：https://www.cnblogs.com/ycyzharry/p/10338870.html
+
+本项目是在yapi 1.8.1下进行开发的,如有发现获取yapi的token失败的情况，请自己实现获取token的方式
 ## 三、解析saz文件录制到yapi对应的项目中
 ### 1.yapi新建组名和项目名
 ![](images/yapi-create-group-project.png)
