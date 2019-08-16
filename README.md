@@ -10,7 +10,7 @@ fiddler过滤待录制接口的域名![](images/fiddler-filter-domain.png)
 ### 4.保存接口信息到saz文件
 ![](images/fiddler-saz-file.png)
 ## 二、Yapi的部署
-### 1.yapi后台去掉录制接口时的重复接口检查
+### 1.yapi后台去掉添加接口时的重复检查
 ![](images/yapi-remove-checkRepeat01.png)
 ![](images/yapi-remove-checkRepeat02.png)
 ### 2.yapi部署
